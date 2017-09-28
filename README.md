@@ -1,3 +1,9 @@
 # 50002_MHP
-Implementation of Auto-Checking 1 bit full adder
 Mini Hardware Project optional task for 50.002 
+FPGA Implementation of 1 bit full adder auto checker (Lucid)
+
+### Group Member:
+Li Xingxuan
+Zhao Guanlun
+Angelina Law
+Kimberly Loh Cheng Lin

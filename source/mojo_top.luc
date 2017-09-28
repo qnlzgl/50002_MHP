@@ -1,0 +1,164 @@
+module mojo_top (
+    input clk,              // 50MHz clock
+    input rst_n,            // reset button (active low)
+    output led [8],         // 8 user controllable LEDs
+    input cclk,             // configuration clock, AVR ready when high
+    output spi_miso,        // AVR SPI MISO
+    input spi_ss,           // AVR SPI Slave Select
+    input spi_mosi,         // AVR SPI MOSI
+    input spi_sck,          // AVR SPI Clock
+    output spi_channel [4], // AVR general purpose pins (used by default to select ADC channel)
+    input avr_tx,           // AVR TX (FPGA RX)
+    output avr_rx,          // AVR RX (FPGA TX)
+    input avr_rx_busy,      // AVR RX buffer full
+    output io_led [3][8],   // LEDs on IO Shield
+    output io_seg [8],      // 7-segment LEDs on IO Shield
+    output io_sel [4],      // Digit select on IO Shield
+    input io_button [5],    // 5 buttons on IO Shield
+    input io_dip [3][8],     // DIP switches on IO Shield
+    
+    output signal_A,
+    output signal_B,
+    output signal_Ci,
+    input signal_S,
+    input signal_Co
+  ) {
+  
+  sig rst;                  // reset signal
+  
+  .clk(clk) {
+    // The reset conditioner is used to synchronize the reset signal to the FPGA
+    // clock. This ensures the entire FPGA comes out of reset at the same time.
+    reset_conditioner reset_cond;
+    edge_detector edge_detector(#RISE(1), #FALL(0)); // detect rising edges
+    button_conditioner button_cond;     // button input conditioner
+
+    .rst(rst) {
+      multi_seven_seg seg;
+      dff counter[3];
+      fsm state(#INIT(IDLE)) = {IDLE, TEST, PASS, FAIL};
+      fsm counter_fsm(#INIT(RESET)) = {COUNT, RESET};
+    }
+  }
+  
+  sig adder_state[3];
+  
+  always {
+    
+    button_cond.in = io_button[1];            // raw button input
+    edge_detector.in = button_cond.out; // input to the edge_detector
+    
+    reset_cond.in = ~rst_n;   // input raw inverted reset signal
+    rst = reset_cond.out;     // conditioned reset
+    
+    led = c{3b0, io_button};  // connect buttons to LEDs
+    spi_miso = bz;            // not using SPI
+    spi_channel = bzzzz;      // not using flags
+    avr_rx = bz;              // not using serial port
+    
+    io_seg = ~seg.seg; // connect segments to the driver
+    io_sel = ~seg.sel; // connect digit select to the driver
+    io_led = 3x{{8h00}};   // connect the DIP switches to the LEDs
+    
+    signal_A = 0;
+    signal_B = 0;
+    signal_Ci = 0;
+    
+    seg.values = {4h10,4h10,4h10,4h10};   // turn down all the led, since 10 will fall into "default" condition
+    
+    // State machine start here
+    
+    case (state.q) {
+      state.IDLE:
+        // Display IDLE
+        seg.values = {4h5, 4h8, 4h6, 4h1};
+        
+        // turn off all the led
+        io_led = 3x{{8h00}};
+        // if button is pressed, state.d -> state.TEST
+        if (edge_detector.out){
+          state.d = state.TEST;
+          }
+ 
+      state.TEST:
+        // Display TEST
+        seg.values = {4h0, 4h1, 4h2, 4h0};
+        
+        // Give input for A B Ci
+        signal_A = counter.q[2];
+        signal_B = counter.q[1];
+        signal_Ci = counter.q[0];
+        
+        // lit up led for input and output respectively
+        io_led[2][7:5] = counter.q;
+        io_led[1][7] = signal_S;
+        io_led[1][6] = signal_Co;
+        
+        // If reset button pressed, go to idle
+        if (rst == 1){
+          state.d = state.IDLE;
+          }
+        
+        if (edge_detector.out){
+          
+            if (counter.q == b111){
+              state.d = state.PASS;
+            }
+
+            if (counter.q == signal_S * 2 + signal_Co)
+            {
+            // check if ALU works properly, if yes, light up 1 LED
+              io_led[0][counter.q] = 1;   
+              counter.d = counter.q + 1;
+            }
+            else 
+            {
+            // if any of the cases failed, Go to fail state 
+            state.d = state.FAIL;
+            }
+          }
+          
+          /*
+          // Use inner FSM to Delay 0.6 seconds before proceeding to next case
+          counter_fsm.d = counter_fsm.COUNT;
+
+          case (counter_fsm.q){
+            
+              counter_fsm.COUNT:
+                if (counter.q[24] != 1){
+                  counter.d = counter.q + 1;
+                }
+                else {
+                  counter_fsm.d = counter_fsm.RESET;
+                }
+
+              counter_fsm.RESET:
+                counter.d = 25b0;
+            }
+          }
+        */
+    
+        state.PASS:
+        // Display PASS
+        seg.values = {4h7, 4h4, 4h2, 4h2}; // PASS
+        
+        counter.d = b000;
+        
+        // if reset button pressed, go to idle
+        if (rst == 1){
+          state.d = state.IDLE;
+          }     
+          
+      state.FAIL:
+        // Display FAIL
+        seg.values = {4h3, 4h4, 4h5, 4h6};
+        
+        counter.d = b000;
+        
+        // if reset button pressed, go to idle
+        if (rst == 1){
+          state.d = state.IDLE;
+          }                
+     }
+    }
+  }
