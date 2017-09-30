@@ -118,25 +118,6 @@ module mojo_top (
             counter.d = counter.q + 1;  
           }
           
-          /*
-          // Use inner FSM to Delay 0.6 seconds before proceeding to next case
-          counter_fsm.d = counter_fsm.COUNT;
-
-          case (counter_fsm.q){
-            
-              counter_fsm.COUNT:
-                if (counter.q[24] != 1){
-                  counter.d = counter.q + 1;
-                }
-                else {
-                  counter_fsm.d = counter_fsm.RESET;
-                }
-
-              counter_fsm.RESET:
-                counter.d = 25b0;
-            }
-          }
-        */
     
         state.PASS:
         // Display PASS
