@@ -37,12 +37,9 @@ module mojo_top (
       multi_seven_seg seg;
       dff counter[3];
       fsm state(#INIT(IDLE)) = {IDLE, TEST, PASS, FAIL};
-      fsm counter_fsm(#INIT(RESET)) = {COUNT, RESET};
     }
   }
-  
-  sig adder_state[3];
-  
+    
   always {
     
     button_cond.in = io_button[1];            // raw button input
@@ -91,31 +88,34 @@ module mojo_top (
         
         // lit up led for input and output respectively
         io_led[2][7:5] = counter.q;
-        io_led[1][7] = signal_S;
-        io_led[1][6] = signal_Co;
+        io_led[1][6] = signal_S;
+        io_led[1][7] = signal_Co;
         
+        // Construct adder_out for later comparision
+
+        io_led[1][7:5] = counter.q[0] + counter.q[1] + counter.q[2];
+        io_led[1][4:2] = signal_Co + signal_Co + signal_S;
+        
+        // check if ALU works properly, if yes, light up 1 LED
+        io_led[0][counter.q] = (counter.q[0] + counter.q[1] + counter.q[2] == signal_Co + signal_Co + signal_S);
+                                
         // If reset button pressed, go to idle
         if (rst == 1){
           state.d = state.IDLE;
           }
-        
-        if (edge_detector.out){
+
+        if (edge_detector.out){          
+
+            if (!(counter.q[0] + counter.q[1] + counter.q[2] == signal_Co + signal_Co + signal_S))
+            {
+            state.d = state.FAIL;
+            }
           
             if (counter.q == b111){
               state.d = state.PASS;
             }
 
-            if (counter.q == signal_S * 2 + signal_Co)
-            {
-            // check if ALU works properly, if yes, light up 1 LED
-              io_led[0][counter.q] = 1;   
-              counter.d = counter.q + 1;
-            }
-            else 
-            {
-            // if any of the cases failed, Go to fail state 
-            state.d = state.FAIL;
-            }
+            counter.d = counter.q + 1;  
           }
           
           /*
